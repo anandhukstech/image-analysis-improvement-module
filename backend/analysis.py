@@ -4,7 +4,7 @@ import easyocr
 from openai import OpenAI
 
 # IMPORTANT: Put your real OpenAI key here (dev mode)
-client = OpenAI(api_key="sk-...zpIA")
+client = OpenAI(api_key="OPENAI_API_KEY")
 
 # Load OCR model ONCE (performance optimization)
 reader = easyocr.Reader(['en'])
