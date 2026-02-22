@@ -1,83 +1,82 @@
 import cv2
 import numpy as np
 import easyocr
+import requests
 
 # Load OCR once
 reader = easyocr.Reader(['en'], gpu=False)
 
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "tinyllama"
 
 def analyze_image(image_path):
     try:
         img = cv2.imread(image_path)
         if img is None:
-            raise ValueError("Invalid image file")
+            raise ValueError("Invalid image")
 
         img = cv2.resize(img, (800, 800))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        brightness = float(np.mean(gray))
-        contrast = float(np.std(gray))
+        brightness = round(float(np.mean(gray)), 2)
+        contrast = round(float(np.std(gray)), 2)
 
         # OCR
-        ocr_result = reader.readtext(image_path)
-        detected_text = [t[1] for t in ocr_result]
+        ocr_results = reader.readtext(image_path)
+        texts = [t[1] for t in ocr_results]
 
-        suggestions = []
+        if not texts:
+            texts = ["No readable text detected"]
 
-        # -------- MARKETING RULE ENGINE -------- #
+        # Prompt
+        prompt = f"""
+You are a senior digital marketing expert.
 
-        # Rule 1: Text overload
-        if len(detected_text) > 10:
-            suggestions.append(
-                "Reduce text content to improve readability and visual hierarchy."
-            )
+Evaluate this marketing creative and give 4 professional improvement suggestions.
 
-        # Rule 2: CTA detection
-        cta_keywords = ["call", "contact", "join", "buy", "register", "learn more"]
-        if not any(any(k.lower() in t.lower() for k in cta_keywords) for t in detected_text):
-            suggestions.append(
-                "Add a clear Call-To-Action (CTA) to guide user engagement."
-            )
+Extracted text:
+{texts[:8]}
 
-        # Rule 3: Brightness
-        if brightness < 80:
-            suggestions.append(
-                "Increase image brightness to improve visibility and user attention."
-            )
-        elif brightness > 200:
-            suggestions.append(
-                "Reduce brightness slightly to avoid visual fatigue."
-            )
+Brightness: {brightness}
+Contrast: {contrast}
 
-        # Rule 4: Contrast
-        if contrast < 40:
-            suggestions.append(
-                "Improve contrast between text and background for better legibility."
-            )
+Focus on:
+- Message clarity
+- CTA effectiveness
+- Visual hierarchy
+- Branding consistency
 
-        # Rule 5: Branding
-        branding_keywords = ["logo", "brand", "company"]
-        if not any(any(k.lower() in t.lower() for k in branding_keywords) for t in detected_text):
-            suggestions.append(
-                "Ensure brand elements like logo or brand name are clearly visible."
-            )
+Give short bullet points.
+"""
 
-        if not suggestions:
-            suggestions.append(
-                "Overall design is balanced. Minor refinements can further enhance visual appeal."
-            )
+        payload = {
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False
+        }
+
+        response = requests.post(OLLAMA_URL, json=payload, timeout=60)
+        response.raise_for_status()
+
+        ai_text = response.json()["response"]
+
+        suggestions = [
+            line.strip("-• ")
+            for line in ai_text.split("\n")
+            if line.strip()
+        ]
 
         return {
-            "detected_text": detected_text if detected_text else ["No text detected"],
-            "brightness": round(brightness, 2),
-            "contrast": round(contrast, 2),
-            "suggestions": suggestions
+            "detected_text": texts,
+            "suggestions": suggestions,
+            "brightness": brightness,
+            "contrast": contrast
         }
 
     except Exception as e:
         return {
-            "detected_text": ["No text detected"],
+            "detected_text": [],
+            "suggestions": [f"Processing error: {str(e)}"],
             "brightness": None,
-            "contrast": None,
-            "suggestions": [str(e)]
+            "contrast": None
         }
