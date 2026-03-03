@@ -1,0 +1,9 @@
+streamlit
+opencv-python
+numpy
+requests
+easyocr
+torch
+torchvision
+Pillow
+python-dotenv
